@@ -2,8 +2,11 @@
 """Draw the 1024x1024 front page for Thursday 19 November 2026.
 
 Run:  python3 tools/make_news_image.py repo/entry.png
-The layout is a fixed grid of rules and text blocks: every block is measured
-before it is drawn and the script fails loudly instead of overflowing a card.
+
+One page for one day: a lead on the Shenzhen summit, the day in numbers, then
+four columns of news by region, each story a headline and two lines of wire
+copy. Every block is measured before it is drawn and the script fails loudly
+instead of overflowing.
 """
 
 from __future__ import annotations
@@ -14,25 +17,24 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 W = H = 1024
-MARGIN = 40
+M = 26
 
 PAPER = (245, 240, 229)
 INK = (18, 22, 27)
 DARK = (21, 25, 30)
-BODY = (58, 55, 50)
-MUTED = (108, 100, 90)
+BODY = (58, 55, 49)
+MUTED = (106, 98, 88)
 ACCENT = (168, 32, 40)
 GOLD = (216, 172, 98)
 RULE = (196, 185, 168)
 WHITE = (247, 243, 234)
-DIM = (198, 192, 181)
+DIM = (202, 196, 185)
 
 FONT_DIRS = [
     Path("/usr/share/fonts/truetype/liberation"),
     Path("/usr/share/fonts/truetype/dejavu"),
     Path("/usr/share/fonts/TTF"),
 ]
-
 SERIF_BOLD = ["LiberationSerif-Bold.ttf", "DejaVuSerif-Bold.ttf"]
 SERIF = ["LiberationSerif-Regular.ttf", "DejaVuSerif.ttf"]
 SANS_BOLD = ["DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf"]
@@ -40,16 +42,16 @@ SANS = ["DejaVuSans.ttf", "LiberationSans-Regular.ttf"]
 SANS_COND_BOLD = ["DejaVuSansCondensed-Bold.ttf", "DejaVuSans-Bold.ttf"]
 
 
-def load(names: list[str], size: int) -> ImageFont.FreeTypeFont:
+def load(names, size):
     for name in names:
         for d in FONT_DIRS:
             p = d / name
             if p.exists():
-                return ImageFont.truetype(str(p), size)
+                return ImageFont.truetype(str(p), int(size))
     raise SystemExit(f"no font of {names} found")
 
 
-def wrap(text: str, font: ImageFont.FreeTypeFont, max_w: int) -> list[str]:
+def wrap(text, font, max_w):
     words, lines, cur = text.split(), [], ""
     for word in words:
         trial = f"{cur} {word}".strip()
@@ -63,39 +65,152 @@ def wrap(text: str, font: ImageFont.FreeTypeFont, max_w: int) -> list[str]:
     return lines
 
 
-def block(draw, text, font, fill, x, y, max_w, line_h, max_lines=None):
-    """Draw wrapped text; return the y just below it. Fails on overflow."""
+def block(d, text, font, fill, x, y, max_w, line_h, max_lines=None):
     lines = wrap(text, font, max_w)
     if max_lines is not None and len(lines) > max_lines:
-        raise SystemExit(f"text needs {len(lines)} lines, budget {max_lines}: {text[:40]!r}")
+        raise SystemExit(f"{len(lines)} lines, budget {max_lines}: {text[:46]!r}")
     for line in lines:
-        draw.text((x, y), line, font=font, fill=fill)
+        d.text((x, y), line, font=font, fill=fill)
         y += line_h
     return y
 
 
-def fit_headline(text, names, start, floor, max_w, max_lines, tracking=0):
-    """Largest size that wraps inside max_lines; returns (font, lines)."""
+def fit_headline(text, names, start, floor, max_w, max_lines):
     size = start
     while size >= floor:
         font = load(names, size)
         lines = wrap(text, font, max_w)
         if len(lines) <= max_lines:
             return font, lines, size
-        size -= 2
-    raise SystemExit(f"headline will not fit: {text[:40]!r}")
+        size -= 0.5
+    raise SystemExit(f"headline will not fit: {text[:46]!r}")
 
 
-def draw_tracked(draw, xy, text, font, fill, tracking=1.0):
+def tracked(d, xy, text, font, fill, tracking=1.0):
     x, y = xy
     for ch in text:
-        draw.text((x, y), ch, font=font, fill=fill)
+        d.text((x, y), ch, font=font, fill=fill)
         x += font.getlength(ch) + tracking
     return x
 
 
-def rule(draw, x0, y0, x1, y1, fill=RULE, width=1):
-    draw.line((x0, y0, x1, y1), fill=fill, width=width)
+def rule(d, x0, y0, x1, y1, fill=RULE, width=1):
+    d.line((x0, y0, x1, y1), fill=fill, width=width)
+
+
+LEAD = (
+    "THREE POWERS, ONE TABLE",
+    "Xi Jinping, Donald Trump and Vladimir Putin sit down together for the first time, "
+    "on APEC's sidelines in Shenzhen, with a Trump-Putin one-to-one to follow. On the "
+    "table: Ukraine, Iran, energy and nuclear arms.",
+    "\u201cThey have enough power to stop Putin in one meeting.\u201d  \u2014 ZELENSKYY",
+)
+
+SECONDARY = [
+    ("ICJ: A GENOCIDE VERDICT", "The Hague rules on whether Myanmar committed genocide "
+     "against the Rohingya, more than 740,000 of whom fled to Bangladesh."),
+    ("THE BIGGEST IPO EVER", "Anthropic raises $81.3bn at $83 a share, a $1.5tn company, "
+     "and starts trading on the Nasdaq as ANT."),
+]
+
+NUMBERS = [
+    ("$81.3bn", "Anthropic's record IPO, the largest ever"),
+    ("1 light-day", "Voyager 1's distance from Earth"),
+    ("740,000", "Rohingya who fled Myanmar in 2017"),
+    ("\u20ac45bn", "EU loan for Kyiv's 2027 budget"),
+    ("13 years", "between GTA V and GTA VI"),
+    ("2,230", "civilians killed in Sudan this year"),
+]
+
+COLUMNS = [
+    ("ASIA-PACIFIC", [
+        ("Cyclone Akvan nears India's east coast",
+         "90-100 kmph winds due Friday; 50,000 evacuated, red alert in 13 districts."),
+        ("Takaichi gets a muted welcome in Shenzhen",
+         "No formal Xi talks for Japan's PM; she presses Putin on a detained reporter."),
+        ("Russian bombers send Asia a message",
+         "Two Tu-95s at Da Nang, after flights that scrambled Taiwan's and Japan's jets."),
+        ("Quad adds eyes at sea",
+         "US, India, Japan and Australia agree maritime surveillance and a joint drill."),
+        ("Canberra signs a US AI pact",
+         "Australia joins a 10-nation deal on AI supply chains, tilting away from Beijing."),
+        ("Xi and Putin, for the 50th time",
+         "They call for a multipolar world; Putin calls Europe a hegemon in decline."),
+        ("Tencent misses as capex soars",
+         "Q3 revenue 207.3bn yuan vs 210.5bn expected; operating profit down 7%."),
+        ("Hong Kong and Tokyo slip",
+         "Hang Seng -0.9% on AI monetisation worries; Japan's bank index opens -2.1%."),
+        ("Trump lands in Manila first",
+         "Manila defence ties tightened before the summit; South China Sea on the agenda."),
+    ]),
+    ("EUROPE", [
+        ("Kerch bridge hit a second time",
+         "Traffic halted days after the first strike; Dutch-made Destinus missiles named."),
+        ("Brussels offers Kyiv \u20ac45bn more",
+         "A new EU loan would fill two-thirds of Ukraine's \u20ac70bn hole for 2027."),
+        ("Berlin gathers the coalition of the willing",
+         "Merz, Macron, Burnham, Tusk, Meloni and Rutte meet US envoys on guarantees."),
+        ("Britain arms Kyiv for the deep fight",
+         "Long-range drones able to strike inside Russia join the new package."),
+        ("EU and Britain edge towards a reset",
+         "Friday's summit draft drops 'trusted partnership' as car talks drag."),
+        ("Prague bars Russian athletes",
+         "No visas for January's women's under-18 ice hockey world championship."),
+        ("Europe's third losing session",
+         "Stoxx 600 -1.0%, DAX -1.2%, FTSE -1.3%; miners -4.7% as copper drops 5.7%."),
+        ("SAP and HSBC drag, chips bounce",
+         "SAP -3.8%, HSBC -2.1%; ASML, STMicro and Infineon each gain over 2.5%."),
+        ("Zelenskyy: one meeting could end it",
+         "Trump, Putin and Xi have the power to stop the war, he says; Kyiv must be in."),
+    ]),
+    ("MIDDLE EAST & AFRICA", [
+        ("Strikes on Iran are back on the table",
+         "Trump weighs a joint campaign with Israel over chemical-weapons fears."),
+        ("Mossad and CENTCOM make the rounds",
+         "Israel's spy chief pressed Washington; Admiral Cooper shuttled to Riyadh."),
+        ("Drones over US bases in the Gulf",
+         "Iran resumes attacks in Kuwait and Bahrain; most intercepted, Hormuz tense."),
+        ("Oil at a three-month low",
+         "WTI $82.70, Brent $91.46, as the IEA sees a 2m-barrel surplus."),
+        ("Sudan's year of the drone",
+         "2,230 civilians killed since January, 1,630 of them by drones, the UN says."),
+        ("Airstrikes empty West Kordofan",
+         "A week of raids around El Khuwei shuts markets and displaces thousands."),
+        ("Sudan's talks lose a bloc",
+         "The SPLM-RDC boycotts next week's Nyon process over Islamist inclusion."),
+        ("Lagos cocaine route cut",
+         "Eight couriers held with 13.8kg bound for Europe across the Sahara."),
+        ("Guinea's mining crackdown",
+         "1,263 arrests; up to 160,000 miners pushed into Mali as a refinery opens."),
+    ]),
+    ("THE AMERICAS & WORLD", [
+        ("Hegseth reopens the Venezuelan door",
+         "In Caracas he signs a military partnership on training and intelligence."),
+        ("Oilfields for a partner",
+         "NABEP, 35% US-owned, targets 250,000 barrels a day by year-end."),
+        ("A 'Donroe Doctrine' with a body count",
+         "Boat strikes have killed more than 200 people since last year, officials say."),
+        ("Waller wants a half-point hike",
+         "The Fed governor cites core inflation running near 3.5% annualised."),
+        ("October minutes land hawkish",
+         "A December rise is priced in; Nvidia's post-earnings rally fizzles out."),
+        ("Nvidia's fifth straight fall",
+         "Moody's cuts its outlook to stable as the AI trade cools further."),
+        ("Voyager 1 is one light-day away",
+         "16.1bn miles out, a first for any human object; its data link is silent."),
+        ("GTA VI finally ships",
+         "Vice City opens after 13 years at $79.99, the most pre-ordered game ever."),
+        ("Bel\u00e9m pledges to triple adaptation",
+         "COP30 targets $120bn a year for adaptation by 2035, with no baseline set."),
+    ]),
+]
+
+TICKER = (
+    "ALSO TODAY  \u00b7  US curbs on China's remote access to AI chips draw a promise of "
+    "retaliation  \u00b7  Take-Two projects $3.5bn of launch-quarter bookings  \u00b7  "
+    "Malaysia's inflation seen at 2.0%  \u00b7  Britain and the EU drop 'trusted "
+    "partnership' from the summit draft"
+)
 
 
 def main() -> None:
@@ -103,177 +218,83 @@ def main() -> None:
     img = Image.new("RGB", (W, H), PAPER)
     d = ImageDraw.Draw(img)
 
-    # ---------------------------------------------------------------- masthead
-    mast = load(SERIF_BOLD, 46)
-    draw_tracked(d, (MARGIN, 28), "THE WORLD TODAY", mast, INK, 1.2)
-    sub = load(SANS_BOLD, 11)
-    draw_tracked(d, (MARGIN + 3, 84), "ONE DAY  ·  ONE PAGE  ·  SIX STORIES", sub, MUTED, 1.6)
+    # ------------------------------------------------------------- masthead
+    tracked(d, (M, 12), "THE WORLD IN ONE DAY", load(SERIF_BOLD, 42), INK, 1.1)
+    tracked(d, (M + 2, 62), "THURSDAY 19 NOVEMBER 2026  \u00b7  39 STORIES  \u00b7  6 CONTINENTS",
+            load(SANS_BOLD, 10), MUTED, 1.5)
+    df = load(SANS_BOLD, 13)
+    dt = "WORLD EDITION \u00b7 NO. 323"
+    d.text((W - M - df.getlength(dt), 26), dt, font=df, fill=INK)
+    d.rectangle((W - M - 30, 48, W - M, 51), fill=ACCENT)
+    rule(d, M, 84, W - M, 84, INK, 2)
 
-    date_f = load(SANS_BOLD, 15)
-    date_txt = "THURSDAY 19 NOVEMBER 2026"
-    d.text((W - MARGIN - date_f.getlength(date_txt), 40), date_txt, font=date_f, fill=INK)
-    ed_f = load(SANS_BOLD, 11)
-    ed_txt = "WORLD EDITION  ·  NO. 323"
-    d.text((W - MARGIN - ed_f.getlength(ed_txt), 62), ed_txt, font=ed_f, fill=MUTED)
-    d.rectangle((W - MARGIN - 34, 84, W - MARGIN, 84), fill=ACCENT)
-    rule(d, MARGIN, 104, W - MARGIN, 104, INK, 2)
+    # ----------------------------------------------------------------- lead
+    top, band_bot = 90, 240
+    d.rectangle((M, top, W - M, band_bot), fill=DARK)
+    kick = load(SANS_BOLD, 10)
+    tracked(d, (M + 18, top + 10), "APEC \u00b7 SHENZHEN \u00b7 FIRST-EVER TRILATERAL", kick, GOLD, 1.3)
+    hf, hl, hs = fit_headline(LEAD[0], SERIF_BOLD, 40, 24, 586, 1)
+    y = top + 27
+    for line in hl:
+        d.text((M + 18, y), line, font=hf, fill=WHITE)
+        y += int(hs * 1.04)
+    y = block(d, LEAD[1], load(SERIF, 13), DIM, M + 18, y + 4, 586, 16.5, max_lines=4)
+    y = block(d, LEAD[2], load(SANS_BOLD, 9.4), GOLD, M + 18, y + 2, 586, 12, max_lines=1)
+    if y > band_bot - 4:
+        raise SystemExit(f"lead column overflows: {y} > {band_bot - 4}")
 
-    # ------------------------------------------------------------------- hero
-    top, bottom = 118, 496
-    d.rectangle((MARGIN, top, W - MARGIN, bottom), fill=DARK)
+    # secondary stories, right of the lead
+    sx = M + 628
+    sy = top + 12
+    for head, body in SECONDARY:
+        d.rectangle((sx, sy + 1, sx + 14, sy + 3), fill=ACCENT)
+        sy = block(d, head, load(SANS_COND_BOLD, 12.5), WHITE, sx, sy + 8, W - M - 16 - sx, 14, max_lines=1)
+        sy = block(d, body, load(SANS, 9.6), DIM, sx, sy + 2, W - M - 16 - sx, 12, max_lines=3)
+        sy += 8
+    if sy > band_bot - 6:
+        raise SystemExit(f"secondary stories overflow the lead band: {sy} > {band_bot - 6}")
 
-    kick = load(SANS_BOLD, 13)
-    draw_tracked(d, (MARGIN + 24, top + 22), "APEC  ·  SHENZHEN  ·  FIRST-EVER TRILATERAL", kick, GOLD, 1.5)
+    # -------------------------------------------------------- numbers strip
+    nb_top = band_bot + 6
+    nb_bot = nb_top + 54
+    rule(d, M, nb_top, W - M, nb_top, INK, 1)
+    cell = (W - 2 * M) / 6
+    for i, (num, cap) in enumerate(NUMBERS):
+        x = M + i * cell
+        if i:
+            rule(d, x - 6, nb_top + 6, x - 6, nb_bot - 6, RULE, 1)
+        d.text((x, nb_top + 5), num, font=load(SERIF_BOLD, 21), fill=ACCENT)
+        block(d, cap, load(SANS, 8.6), MUTED, x, nb_top + 29, cell - 12, 9.8, max_lines=2)
+    rule(d, M, nb_bot, W - M, nb_bot, RULE, 1)
 
-    hero_w = 560
-    hfont, hlines, hsize = fit_headline("THREE POWERS, ONE TABLE", SERIF_BOLD, 64, 44, hero_w, 2)
-    y = top + 52
-    for line in hlines:
-        d.text((MARGIN + 24, y), line, font=hfont, fill=WHITE)
-        y += int(hsize * 1.04)
+    # -------------------------------------------------------------- columns
+    col_top = nb_bot + 7
+    col_bot = 952
+    gut = 13
+    colw = (W - 2 * M - 3 * gut) / 4
+    for ci, (region, stories) in enumerate(COLUMNS):
+        x0 = M + ci * (colw + gut)
+        x1 = x0 + colw
+        if ci:
+            rule(d, x0 - gut / 2, col_top, x0 - gut / 2, col_bot, RULE, 1)
+        d.rectangle((x0, col_top, x1, col_top + 14), fill=INK)
+        tracked(d, (x0 + 4, col_top + 3), f"{region}  \u00b7  {len(stories)}",
+                load(SANS_BOLD, 7.8), WHITE, 0.7)
+        y = col_top + 20
+        for n, (head, body) in enumerate(stories):
+            hfont, hlines, hsz = fit_headline(head, SANS_COND_BOLD, 13.5, 9.5, colw, 2)
+            for line in hlines:
+                d.text((x0, y), line, font=hfont, fill=INK)
+                y += int(hsz * 1.15)
+            y = block(d, body, load(SANS, 10.2), BODY, x0, y + 1, colw, 12, max_lines=2)
+            y += 7 if n < len(stories) - 1 else 0
+        if y > col_bot:
+            raise SystemExit(f"column {region} overflows: {y} > {col_bot}")
 
-    y = block(
-        d,
-        "Xi Jinping, Donald Trump and Vladimir Putin sit down together for the first "
-        "time, on APEC's sidelines, with a Trump-Putin one-to-one to follow. On the "
-        "table: Ukraine, Iran, energy, nuclear arms.",
-        load(SERIF, 18), DIM, MARGIN + 24, y + 14, hero_w, 24, max_lines=4,
-    )
+    # --------------------------------------------------------------- ticker
+    rule(d, M, col_bot + 6, W - M, col_bot + 6, INK, 2)
+    block(d, TICKER, load(SANS, 9.2), MUTED, M, col_bot + 12, W - 2 * M, 11.5, max_lines=2)
 
-    # a pull quote, on the eve of the summit
-    y += 10
-    rule(d, MARGIN + 24, y + 2, MARGIN + 24, y + 40, GOLD, 3)
-    y = block(d, "\u201cEnough power to stop Putin in one meeting.\u201d",
-              load(SERIF, 20), WHITE, MARGIN + 40, y, hero_w - 20, 24, max_lines=1)
-    block(d, "ZELENSKYY, AHEAD OF THE SHENZHEN SUMMIT", load(SANS_BOLD, 11), GOLD,
-          MARGIN + 40, y + 2, hero_w - 20, 14, max_lines=1)
-
-    if y + 18 > bottom - 50:
-        raise SystemExit(f"hero column overflows: quote ends at {y + 18}, rule at {bottom - 50}")
-
-    rule(d, MARGIN + 24, bottom - 44, MARGIN + 24 + hero_w, bottom - 44, (74, 78, 82))
-    block(d, "THE AGENDA  ·  UKRAINE  ·  IRAN  ·  NUCLEAR ARMS  ·  TRADE",
-          load(SANS_BOLD, 12), GOLD, MARGIN + 24, bottom - 32, hero_w, 16, max_lines=1)
-
-    # right column of the hero: the number and the three seats
-    num_f = load(SERIF_BOLD, 104)
-    d.text((700, top + 44), "1st", font=num_f, fill=GOLD)
-    block(d, "time the leaders of China, Russia and the United States share one table",
-          load(SANS, 13), DIM, 706, top + 160, 258, 18, max_lines=3)
-
-    bars = [("CN", 96, (196, 60, 52)), ("RU", 74, (222, 214, 196)), ("US", 112, (92, 132, 190))]
-    bx, base = 706, bottom - 56
-    for label, h, colour in bars:
-        d.rectangle((bx, base - h, bx + 46, base), fill=colour)
-        lab = load(SANS_BOLD, 11)
-        d.text((bx + 2, base + 4), label, font=lab, fill=DIM)
-        bx += 58
-
-    # ------------------------------------------------------------- row A rules
-    row_a_top, row_a_bot = 512, 704
-    mid = 500
-    rule(d, MARGIN, row_a_top - 8, W - MARGIN, row_a_top - 8, RULE, 1)
-    rule(d, mid + 12, row_a_top, mid + 12, row_a_bot, RULE, 1)
-
-    def card(x0, x1, kicker, metric, headline, body, hsize, hlines, bsize, blines, blh):
-        y = row_a_top + 10
-        d.rectangle((x0, y + 3, x0 + 22, y + 6), fill=ACCENT)
-        y += 12
-        kf = load(SANS_BOLD, 12)
-        draw_tracked(d, (x0, y), kicker, kf, ACCENT, 1.3)
-        if metric:
-            mf = load(SERIF_BOLD, 21)
-            d.text((x1 - mf.getlength(metric), y - 5), metric, font=mf, fill=ACCENT)
-        y += 24
-        hf, hl, used = fit_headline(headline, SANS_COND_BOLD, hsize, hsize - 8, x1 - x0, hlines)
-        for line in hl:
-            d.text((x0, y), line, font=hf, fill=INK)
-            y += int(used * 1.12)
-        y += 6
-        block(d, body, load(SANS, bsize), BODY, x0, y, x1 - x0, blh, max_lines=blines)
-
-    card(
-        MARGIN, mid,
-        "UKRAINE  ·  CRIMEA", "€45BN",
-        "KERCH BRIDGE HIT A SECOND TIME",
-        "Drones and missiles halt traffic on the bridge to Crimea days after the first "
-        "strike; Dutch-made Destinus missiles are named, and Moscow asks if The Hague has "
-        "joined the war. The EU offers a €45bn loan; Berlin's coalition of the willing "
-        "meets US envoys.",
-        hsize=27, hlines=2, bsize=14, blines=5, blh=18,
-    )
-    card(
-        mid + 24, W - MARGIN,
-        "IRAN  ·  THE GULF", "8 MONTHS",
-        "STRIKES ARE BACK ON THE TABLE",
-        "Trump weighs a joint US-Israeli campaign as Israel warns of chemical-weapons work; "
-        "targets include Pickaxe Mountain. Gulf states urge restraint, Hormuz stays tense, "
-        "and the war he promised would be quick enters its eighth month.",
-        hsize=27, hlines=2, bsize=14, blines=5, blh=18,
-    )
-
-    # ------------------------------------------------------------- row B rules
-    row_b_top, row_b_bot = 714, 878
-    rule(d, MARGIN, row_b_top - 8, W - MARGIN, row_b_top - 8, RULE, 1)
-    c1, c2 = 344, 656
-    rule(d, c1, row_b_top, c1, row_b_bot, RULE, 1)
-    rule(d, c2, row_b_top, c2, row_b_bot, RULE, 1)
-
-    def small(x0, x1, kicker, metric, headline, body):
-        y = row_b_top + 8
-        d.rectangle((x0, y + 2, x0 + 18, y + 5), fill=ACCENT)
-        y += 10
-        kf = load(SANS_BOLD, 10)
-        draw_tracked(d, (x0, y), kicker, kf, ACCENT, 1.1)
-        if metric:
-            mf = load(SERIF_BOLD, 17)
-            d.text((x1 - mf.getlength(metric), y - 4), metric, font=mf, fill=ACCENT)
-        y += 20
-        hf, hl, used = fit_headline(headline, SANS_COND_BOLD, 19, 15, x1 - x0 - 18, 2)
-        for line in hl:
-            d.text((x0, y), line, font=hf, fill=INK)
-            y += int(used * 1.14)
-        y += 5
-        block(d, body, load(SANS, 12), BODY, x0, y, x1 - x0 - 18, 16, max_lines=4)
-
-    small(
-        MARGIN, c1 - 18,
-        "MARKETS", "$82.70",
-        "ANTHROPIC'S DEBUT, OIL'S SLIDE",
-        "Anthropic prices its IPO above range as it starts trading; Nvidia falls a fifth "
-        "day; WTI at $82.70 and Brent near $91, the lowest in three months; gold drops 3%.",
-    )
-    small(
-        c1 + 18, c2 - 18,
-        "CHIPS  ·  TRADE", "AI CURBS",
-        "WASHINGTON TIGHTENS, BEIJING VOWS REPLY",
-        "New US limits on China's remote access to advanced AI chips draw a promise of "
-        "retaliation, as Xi courts the Global South on open trade in Shenzhen.",
-    )
-    small(
-        c2 + 18, W - MARGIN,
-        "JAPAN  ·  CHINA", "1st",
-        "A HANDSHAKE, NOT A THAW",
-        "Sanae Takaichi meets Xi for the first time since taking office, ties still raw "
-        "over Taiwan; she also holds her first talks with Putin.",
-    )
-
-    # ----------------------------------------------------------------- ticker
-    tick_top = 892
-    d.rectangle((0, tick_top, W, H), fill=DARK)
-    d.rectangle((MARGIN, tick_top + 18, MARGIN + 6, tick_top + 30), fill=ACCENT)
-    draw_tracked(d, (MARGIN + 16, tick_top + 15), "ALSO TODAY", load(SANS_BOLD, 12), GOLD, 1.4)
-    block(
-        d,
-        "Grand Theft Auto 6 finally ships after 13 years  ·  Britain sends long-range drones "
-        "to Kyiv  ·  Copper falls 5.7%  ·  Malaysia's inflation edges up to 2.0%  ·  "
-        "Takaichi and Putin meet as a Japanese journalist is held in Russia",
-        load(SANS, 13), DIM, MARGIN + 16, tick_top + 38, W - 2 * MARGIN - 16, 19, max_lines=3,
-    )
-    rule(d, 0, tick_top, W, tick_top, GOLD, 2)
-
-    if img.size != (W, H):
-        raise SystemExit("bad size")
     img.save(out, format="PNG", optimize=True)
     print(f"wrote {out} ({out.stat().st_size} bytes, {img.size[0]}x{img.size[1]})")
 
